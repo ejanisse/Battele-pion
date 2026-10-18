@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Board Morpion - En Ligne</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- Intégration de PeerJS pour le multijoueur en ligne facile -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #06050a;
+            --arcade-cabinet: #120f1d;
+            --board-wood: #251d38;
+            --board-border: #3b2f59;
+            --cell-bg: #0d0a14;
+            --cell-hover: #181326;
+            --border-dark: #030205;
+            --border-light: #5e4d8c;
+            --text-main: #f3f0ff;
+            --accent-x: #38bdf8;
+            --accent-o: #f43f5e;
+            --accent-gold: #fbbf24;
+        }
+
+        html, body {
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 10%, #1a1033 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, #2b0c1e 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, #0c0914 0%, #030205 100%);
+            font-family: 'Press Start 2P', monospace;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- MENUS --- */
+        .screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .menu-decor-box {
+            border: 4px solid var(--accent-gold);
+            padding: 25px 35px;
+            background: var(--arcade-cabinet);
+            box-shadow: 10px 10px 0px #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+            width: 320px;
+        }
+
+        .menu-decor-box::before, .menu-decor-box::after {
+            content: '♦';
+            color: var(--accent-gold);
+            position: absolute;
+            font-size: 0.8rem;
+        }
+        .menu-decor-box::before { top: 6px; left: 6px; }
+        .menu-decor-box::after { top: 6px; right: 6px; }
+
+        .menu-decor-header {
+            display: flex;
+            gap: 25px;
+            font-size: 2rem;
+        }
+        .menu-decor-x { color: var(--accent-x); text-shadow: 4px 4px 0px #000; animation: floatX 1.2s infinite alternate; }
+        .menu-decor-o { color: var(--accent-o); text-shadow: 4px 4px 0px #000; animation: floatO 1.2s infinite alternate; }
+
+        @keyframes floatX { from { transform: translateY(0); } to { transform: translateY(-8px); } }
+        @keyframes floatO { from { transform: translateY(-8px); } to { transform: translateY(0); } }
+
+        h1 {
+            font-size: 1.3rem;
+            text-transform: uppercase;
+            margin: 0;
+            color: var(--accent-gold);
+            text-shadow: 4px 4px 0px #000;
+            line-height: 1.4;
+        }
+
+        .menu-subtitle {
+            font-size: 0.4rem;
+            color: #94a3b8;
+            letter-spacing: 2px;
+        }
+
+        .pixel-btn {
+            background-color: #4f46e5;
+            color: #fff;
+            border: 4px solid var(--border-dark);
+            box-shadow: 4px 4px 0px var(--border-dark);
+            padding: 12px 16px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.5rem;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.1s;
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        .pixel-btn:hover { background-color: #6366f1; transform: scale(1.02); }
+        .pixel-btn:active { transform: translate(4px, 4px); box-shadow: none; }
+        .pixel-btn.secondary { background-color: #334155; }
+        .pixel-btn.secondary:hover { background-color: #475569; }
+        .pixel-btn.danger { background-color: #e11d48; }
+
+        .pixel-input {
+            background-color: #0d0a14;
+            border: 3px solid var(--border-light);
+            color: var(--text-main);
+            padding: 10px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.5rem;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            outline: none;
+        }
+        .pixel-input:focus { border-color: var(--accent-gold); }
+
+        /* --- ÉCRAN DE JEU --- */
+        #game-screen { display: none; }
+
+        .arcade-cabinet {
+            background-color: var(--arcade-cabinet);
+            border: 6px solid var(--border-dark);
+            box-shadow: 14px 14px 0px #000, inset 0 0 25px rgba(0,0,0,0.6);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            width: 380px;
+            position: relative;
+        }
+
+        .cabinet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            border-bottom: 3px solid var(--border-light);
+            padding-bottom: 10px;
+        }
+
+        h2.game-title {
+            font-size: 0.6rem;
+            color: var(--accent-gold);
+            text-shadow: 2px 2px 0px #000;
+            margin: 0;
+        }
+
+        #status {
+            font-size: 0.45rem;
+            text-align: center;
+            background: #06040a;
+            border: 3px solid var(--border-light);
+            padding: 10px;
+            box-shadow: inset 3px 3px 0px rgba(0,0,0,0.9);
+            width: 100%;
+            box-sizing: border-box;
+            line-height: 1.4;
+        }
+
+        .board-wrapper {
+            background: linear-gradient(135deg, var(--board-wood), var(--board-border));
+            border: 6px solid var(--border-dark);
+            box-shadow: inset 5px 5px 0px rgba(255,255,255,0.1), 8px 8px 0px #000;
+            padding: 14px;
+            position: relative;
+        }
+
+        .board-wrapper::before, .board-wrapper::after {
+            content: '⊙';
+            color: #b4a8d4;
+            font-size: 0.55rem;
+            position: absolute;
+        }
+        .board-wrapper::before { top: 4px; left: 4px; }
+        .board-wrapper::after { top: 4px; right: 4px; }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 90px);
+            grid-template-rows: repeat(3, 90px);
+            gap: 8px;
+        }
+
+        .cell {
+            background-color: var(--cell-bg);
+            border: 4px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.4rem;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: inset 5px 5px 0px rgba(0,0,0,0.9), 2px 2px 0px rgba(0,0,0,0.5);
+            transition: background-color 0.1s;
+        }
+
+        .cell:hover { background-color: var(--cell-hover); }
+        .cell.x { color: var(--accent-x); text-shadow: 4px 4px 0px #000; }
+        .cell.o { color: var(--accent-o); text-shadow: 4px 4px 0px #000; }
+        .cell.fading {
+            opacity: 0.35;
+            border-color: var(--accent-gold);
+            animation: blink 0.8s infinite alternate;
+        }
+
+        @keyframes blink { 0% { opacity: 0.2; } 100% { opacity: 0.8; } }
+
+        .players-bar-pixel {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            gap: 10px;
+        }
+
+        .player-box {
+            background-color: #0d0a14;
+            border: 3px solid var(--border-light);
+            padding: 8px;
+            box-shadow: inset 2px 2px 0px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+        }
+
+        .player-box.active-x { border-color: var(--accent-x); box-shadow: 0 0 12px rgba(56, 189, 248, 0.4), inset 2px 2px 0px rgba(0,0,0,0.8); }
+        .player-box.active-o { border-color: var(--accent-o); box-shadow: 0 0 12px rgba(244, 63, 94, 0.4), inset 2px 2px 0px rgba(0,0,0,0.8); }
+
+        .player-name { font-size: 0.42rem; }
+
+        .pixel-small-btn {
+            background-color: #3b82f6;
+            color: #fff;
+            border: 2px solid #000;
+            box-shadow: 2px 2px 0px #000;
+            padding: 6px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.38rem;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+        }
+        .pixel-small-btn:hover { background-color: #60a5fa; }
+        .pixel-small-btn.danger { background-color: #e11d48; }
+        .pixel-small-btn.danger:hover { background-color: #f43f5e; }
+        .pixel-small-btn.secondary { background-color: #475569; }
+
+        /* MODALES & VICTOIRE */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(3, 2, 5, 0.9);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 2000;
+            display: none;
+        }
+
+        .modal-box {
+            background-color: var(--arcade-cabinet);
+            border: 6px solid var(--border-dark);
+            box-shadow: 12px 12px 0px #000;
+            padding: 25px;
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            text-align: center;
+        }
+
+        .modal-box h3 { font-size: 0.6rem; color: var(--accent-gold); margin: 0; }
+        .modal-box p { font-size: 0.42rem; line-height: 1.5; color: #94a3b8; text-align: left; margin: 0; }
+
+        .power-opt-btn {
+            background-color: #334155;
+            color: #fff;
+            border: 3px solid #000;
+            box-shadow: 3px 3px 0px #000;
+            padding: 12px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.42rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .power-opt-btn:hover:not(:disabled) { background-color: #475569; }
+        .power-opt-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. MENU PRINCIPAL -->
+    <div id="menu-screen" class="screen">
+        <div class="menu-decor-box">
+            <div class="menu-decor-header">
+                <span class="menu-decor-x">X</span>
+                <span style="color: var(--accent-gold);">★</span>
+                <span class="menu-decor-o">O</span>
+            </div>
+            <h1>PIXEL<br>MORPION</h1>
+            <p class="menu-subtitle">ONLINE MULTIPLAYER</p>
+            <button class="pixel-btn" onclick="startLocalGame()">MODE LOCAL (1 ÉCRAN)</button>
+            <button class="pixel-btn secondary" onclick="openHostScreen()">CRÉER UN SALON</button>
+            <button class="pixel-btn secondary" onclick="openJoinScreen()">REJOINDRE UN SALON</button>
+            <button class="pixel-btn secondary" onclick="openRulesModal()" style="font-size: 0.45rem;">RÈGLES</button>
+        </div>
+    </div>
+
+    <!-- 2. ÉCRAN CRÉER SALON -->
+    <div id="host-screen" class="screen" style="display:none;">
+        <div class="menu-decor-box">
+            <h1>CRÉER UN SALON</h1>
+            <p class="menu-subtitle">En attente de connexion...</p>
+            <div id="room-code-display" style="font-size: 0.55rem; color: var(--accent-gold); background: #06040a; padding: 10px; border: 2px solid var(--border-light); width: 100%; box-sizing: border-box;">Génération...</div>
+            <p style="font-size: 0.38rem; color: #94a3b8; text-align: center;">Donne ce code à ton ami pour qu'il puisse te rejoindre.</p>
+            <button class="pixel-btn danger" onclick="returnToMenu()">ANNULER</button>
+        </div>
+    </div>
+
+    <!-- 3. ÉCRAN REJOINDRE SALON -->
+    <div id="join-screen" class="screen" style="display:none;">
+        <div class="menu-decor-box">
+            <h1>REJOINDRE</h1>
+            <p class="menu-subtitle">Entre le code de ton ami</p>
+            <input type="text" id="join-code-input" class="pixel-input" placeholder="CODE DU SALON">
+            <button class="pixel-btn" onclick="connectToRoom()">SE CONNECTER</button>
+            <button class="pixel-btn danger" onclick="returnToMenu()">RETOUR</button>
+        </div>
+    </div>
+
+    <!-- 4. ÉCRAN DE JEU -->
+    <div id="game-screen" class="screen">
+        <div class="arcade-cabinet">
+            <div class="cabinet-header">
+                <h2 class="game-title" id="game-mode-title">MODE LOCAL</h2>
+                <button class="pixel-small-btn danger" style="width:auto; padding:5px 8px;" onclick="returnToMenu()">QUITTER</button>
+            </div>
+
+            <div id="status">Tour : <span id="current-player" style="color: var(--accent-x);">JOUEUR X</span></div>
+
+            <div class="board-wrapper">
+                <div class="board" id="board"></div>
+            </div>
+
+            <div class="players-bar-pixel">
+                <div class="player-box" id="box-x">
+                    <span class="player-name" style="color: var(--accent-x);">JOUEUR X</span>
+                    <button class="pixel-small-btn" onclick="openPowerModal('X')">⚡ POUVOIRS</button>
+                </div>
+                <div class="player-box" id="box-o">
+                    <span class="player-name" style="color: var(--accent-o);">JOUEUR O</span>
+                    <button class="pixel-small-btn" onclick="openPowerModal('O')">⚡ POUVOIRS</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE VICTOIRE -->
+    <div class="overlay" id="victory-modal">
+        <div class="modal-box" style="border-color: var(--accent-gold);">
+            <div style="font-size: 2.2rem;">👑</div>
+            <h3 style="color: var(--accent-gold);">VICTOIRE LÉGENDAIRE !</h3>
+            <div id="victory-text" style="font-size: 0.55rem; font-weight: bold;">LE JOUEUR X A GAGNÉ !</div>
+            <button class="pixel-btn" onclick="resetGame()">REJOUER</button>
+            <button class="pixel-btn secondary" onclick="returnToMenu()">MENU PRINCIPAL</button>
+        </div>
+    </div>
+
+    <!-- MODALE POUVOIRS -->
+    <div class="overlay" id="power-modal">
+        <div class="modal-box">
+            <h3 id="modal-title">POUVOIRS DE X</h3>
+            <button class="power-opt-btn" id="btn-destroy" onclick="selectPower('destroy')"><span>💥 Destruction</span><span>[1x]</span></button>
+            <button class="power-opt-btn" id="btn-invert" onclick="selectPower('invert')"><span>🔄 Inversion</span><span>[1x]</span></button>
+            <button class="power-opt-btn" id="btn-freeze" onclick="selectPower('freeze')"><span>🛡️ Gel Case</span><span>[1x]</span></button>
+            <button class="pixel-small-btn secondary" style="padding: 10px;" onclick="closePowerModal()">ANNULER</button>
+        </div>
+    </div>
+
+    <!-- MODALE RÈGLES -->
+    <div class="overlay" id="rules-modal">
+        <div class="modal-box" style="width: 340px;">
+            <h3>RÈGLES DU JEU</h3>
+            <p>• <b>3 Pions Max :</b> Au 4e coup, votre pion le plus ancien disparaît automatiquement.</p>
+            <p>• <b>Alerte Clignotante :</b> Le pion entouré de jaune va s'effacer au prochain coup !</p>
+            <p>• <b>3 Pouvoirs :</b> Destruction, Inversion et Gel utilisables 1 seule fois par partie.</p>
+            <button class="pixel-small-btn" style="padding: 10px;" onclick="closeRulesModal()">COMPRIS !</button>
+        </div>
+    </div>
+
+    <script>
+        const menuScreen = document.getElementById('menu-screen');
+        const hostScreen = document.getElementById('host-screen');
+        const joinScreen = document.getElementById('join-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const roomCodeDisplay = document.getElementById('room-code-display');
+        const joinCodeInput = document.getElementById('join-code-input');
+        const gameModeTitle = document.getElementById('game-mode-title');
+        
+        const boardElement = document.getElementById('board');
+        const statusElement = document.getElementById('status');
+        const currentPlayerSpan = document.getElementById('current-player');
+        const powerModal = document.getElementById('power-modal');
+        const rulesModal = document.getElementById('rules-modal');
+        const victoryModal = document.getElementById('victory-modal');
+        const victoryText = document.getElementById('victory-text');
+        const modalTitle = document.getElementById('modal-title');
+        const boxX = document.getElementById('box-x');
+        const boxO = document.getElementById('box-o');
+
+        let board = Array(9).fill(null);
+        let currentPlayer = 'X';
+        let gameActive = true;
+        let historyX = [];
+        let historyO = [];
+        let powersUsed = {
+            X: { destroy: false, invert: false, freeze: false },
+            O: { destroy: false, invert: false, freeze: false }
+        };
+        let activePowerMode = null;
+
+        // Variables Réseau (PeerJS)
+        let peer = null;
+        let conn = null;
+        let isOnline = false;
+        let myRole = 'X'; // 'X' pour l'hôte, 'O' pour celui qui rejoint
+
+        function showScreen(screenId) {
+            menuScreen.style.display = 'none';
+            hostScreen.style.display = 'none';
+            joinScreen.style.display = 'none';
+            gameScreen.style.display = 'none';
+            victoryModal.style.display = 'none';
+            powerModal.style.display = 'none';
+            rulesModal.style.display = 'none';
+            document.getElementById(screenId).style.display = 'flex';
+        }
+
+        function returnToMenu() {
+            if (peer) { peer.destroy(); peer = null; }
+            if (conn) { conn.close(); conn = null; }
+            isOnline = false;
+            showScreen('menu-screen');
+        }
+
+        function startLocalGame() {
+            isOnline = false;
+            gameModeTitle.textContent = "MODE LOCAL";
+            showScreen('game-screen');
+            resetGameData();
+        }
+
+        // --- GESTION EN LIGNE (PEERJS) ---
+        function openHostScreen() {
+            showScreen('host-screen');
+            roomCodeDisplay.textContent = "Connexion...";
+            
+            // Génère un code aléatoire à 4 chiffres/lettres
+            const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+            
+            peer = new Peer(randomCode);
+            
+            peer.on('open', (id) => {
+                roomCodeDisplay.textContent = id;
+            });
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                myRole = 'X'; // L'hôte est X
+                setupConnection();
+                isOnline = true;
+                gameModeTitle.textContent = "EN LIGNE (HÔTE)";
+                showScreen('game-screen');
+                resetGameData();
+            });
+
+            peer.on('error', (err) => {
+                alert("Erreur de salon (code déjà pris ? Réessaie).");
+                returnToMenu();
+            });
+        }
+
+        function openJoinScreen() {
+            showScreen('join-screen');
+        }
+
+        function connectToRoom() {
+            const code = joinCodeInput.value.trim().toUpperCase();
+            if (!code) {
+                alert("Entre un code valide !");
+                return;
+            }
+
+            peer = new Peer();
+            
+            peer.on('open', () => {
+                conn = peer.connect(code);
+                myRole = 'O'; // Celui qui rejoint est O
+                
+                conn.on('open', () => {
+                    setupConnection();
+                    isOnline = true;
+                    gameModeTitle.textContent = "EN LIGNE (INVITÉ)";
+                    showScreen('game-screen');
+                    resetGameData();
+                });
+
+                conn.on('error', () => {
+                    alert("Impossible de trouver ce salon.");
+                });
+            });
+        }
+
+        function setupConnection() {
+            conn.on('data', (data) => {
+                // Réception des actions de l'autre joueur
+                if (data.type === 'action') {
+                    board = data.board;
+                    currentPlayer = data.currentPlayer;
+                    gameActive = data.gameActive;
+                    historyX = data.historyX;
+                    historyO = data.historyO;
+                    powersUsed = data.powersUsed;
+                    
+                    updateBoardUI();
+                    updateHUD();
+
+                    if (!gameActive) {
+                        triggerVictoryUI(false);
+                    }
+                }
+            });
+        }
+
+        function sendData() {
+            if (isOnline && conn && conn.open) {
+                conn.send({
+                    type: 'action',
+                    board,
+                    currentPlayer,
+                    gameActive,
+                    historyX,
+                    historyO,
+                    powersUsed
+                });
+            }
+        }
+
+        // --- LOGIQUE DU JEU ---
+        function createBoard() {
+            boardElement.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => handleCellClick(i));
+                boardElement.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(index) {
+            if (!gameActive) return;
+
+            // En ligne, vérifie si c'est ton tour
+            if (isOnline && currentPlayer !== myRole) {
+                return; // Ce n'est pas ton tour
+            }
+
+            if (activePowerMode) {
+                applyPower(index);
+                return;
+            }
+
+            if (board[index] !== null) return;
+
+            board[index] = currentPlayer;
+
+            if (currentPlayer === 'X') {
+                historyX.push(index);
+                if (historyX.length > 3) {
+                    let old = historyX.shift();
+                    board[old] = null;
+                }
+            } else {
+                historyO.push(index);
+                if (historyO.length > 3) {
+                    let old = historyO.shift();
+                    board[old] = null;
+                }
+            }
+
+            updateBoardUI();
+
+            if (checkWin()) {
+                triggerVictory();
+                sendData();
+                return;
+            }
+
+            switchPlayer();
+            sendData();
+        }
+
+        function triggerVictory() {
+            gameActive = false;
+            triggerVictoryUI(true);
+        }
+
+        function triggerVictoryUI(localTrigger) {
+            statusElement.innerHTML = `🎉 VICTOIRE DU JOUEUR <span style="color: ${currentPlayer === 'X' ? 'var(--accent-x)' : 'var(--accent-o)'};">${currentPlayer}</span> !`;
+            victoryText.textContent = `LE JOUEUR ${currentPlayer} A GAGNÉ !`;
+            victoryText.style.color = currentPlayer === 'X' ? 'var(--accent-x)' : 'var(--accent-o)';
+            setTimeout(() => {
+                victoryModal.style.display = 'flex';
+            }, 300);
+        }
+
+        function switchPlayer() {
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            updateHUD();
+            updateBoardUI();
+        }
+
+        function updateHUD() {
+            currentPlayerSpan.textContent = `JOUEUR ${currentPlayer}`;
+            currentPlayerSpan.style.color = currentPlayer === 'X' ? 'var(--accent-x)' : 'var(--accent-o)';
+            statusElement.innerHTML = `Tour : <span id="current-player" style="color: ${currentPlayer === 'X' ? 'var(--accent-x)' : 'var(--accent-o)'};">JOUEUR ${currentPlayer}</span>`;
+            
+            if (currentPlayer === 'X') {
+                boxX.classList.add('active-x');
+                boxO.classList.remove('active-o');
+            } else {
+                boxO.classList.add('active-o');
+                boxX.classList.remove('active-x');
+            }
+        }
+
+        function updateBoardUI() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach((cell, i) => {
+                cell.textContent = board[i] === '🔒' ? '🔒' : (board[i] || '');
+                cell.className = 'cell';
+                if (board[i] === 'X') cell.classList.add('x');
+                if (board[i] === 'O') cell.classList.add('o');
+
+                if (currentPlayer === 'X' && historyX.length === 3 && historyX[0] === i) {
+                    cell.classList.add('fading');
+                }
+                if (currentPlayer === 'O' && historyO.length === 3 && historyO[0] === i) {
+                    cell.classList.add('fading');
+                }
+            });
+        }
+
+        function openPowerModal(player) {
+            if (!gameActive) return;
+            if (isOnline && player !== myRole) return;
+            if (currentPlayer !== player) return;
+
+            modalTitle.textContent = `POUVOIRS DE J${player}`;
+            document.getElementById('btn-destroy').disabled = powersUsed[player].destroy;
+            document.getElementById('btn-invert').disabled = powersUsed[player].invert;
+            document.getElementById('btn-freeze').disabled = powersUsed[player].freeze;
+
+            powerModal.style.display = 'flex';
+        }
+
+        function closePowerModal() { powerModal.style.display = 'none'; }
+
+        function selectPower(type) {
+            activePowerMode = type;
+            closePowerModal();
+            statusElement.innerHTML = `⚡ POUVOIR <span style="color: var(--accent-gold);">${type.toUpperCase()}</span> : Clique sur une case`;
+        }
+
+        function applyPower(index) {
+            let success = false;
+
+            if (activePowerMode === 'destroy') {
+                if (board[index] !== null) {
+                    historyX = historyX.filter(i => i !== index);
+                    historyO = historyO.filter(i => i !== index);
+                    board[index] = null;
+                    success = true;
+                }
+            } else if (activePowerMode === 'invert') {
+                if (board[index] !== null && board[index] !== '🔒') {
+                    if (board[index] === 'X') {
+                        board[index] = 'O';
+                        historyX = historyX.filter(i => i !== index);
+                        historyO.push(index);
+                    } else {
+                        board[index] = 'X';
+                        historyO = historyO.filter(i => i !== index);
+                        historyX.push(index);
+                    }
+                    success = true;
+                }
+            } else if (activePowerMode === 'freeze') {
+                if (board[index] === null) {
+                    board[index] = '🔒';
+                    setTimeout(() => {
+                        if (board[index] === '🔒') board[index] = null;
+                        updateBoardUI();
+                        if (isOnline && myRole === 'X') sendData();
+                    }, 3000);
+                    success = true;
+                }
+            }
+
+            if (success) {
+                powersUsed[currentPlayer][activePowerMode] = true;
+                activePowerMode = null;
+                updateBoardUI();
+
+                if (checkWin()) {
+                    triggerVictory();
+                    sendData();
+                    return;
+                }
+
+                switchPlayer();
+                sendData();
+            } else {
+                activePowerMode = null;
+                updateHUD();
+            }
+        }
+
+        const winConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+
+        function checkWin() {
+            return winConditions.some(cond => {
+                const [a, b, c] = cond;
+                return board[a] && board[a] !== '🔒' && board[a] === board[b] && board[a] === board[c];
+            });
+        }
+
+        function resetGameData() {
+            board = Array(9).fill(null);
+            currentPlayer = 'X';
+            gameActive = true;
+            historyX = [];
+            historyO = [];
+            activePowerMode = null;
+            powersUsed = {
+                X: { destroy: false, invert: false, freeze: false },
+                O: { destroy: false, invert: false, freeze: false }
+            };
+            powerModal.style.display = 'none';
+            victoryModal.style.display = 'none';
+            createBoard();
+            updateHUD();
+            if (isOnline && myRole === 'X') sendData();
+        }
+
+        function resetGame() {
+            if (isOnline && myRole !== 'X') {
+                alert("Seul l'hôte du salon peut relancer la partie !");
+                return;
+            }
+            resetGameData();
+            if (isOnline) sendData();
+        }
+
+        function openRulesModal() { rulesModal.style.display = 'flex'; }
+        function closeRulesModal() { rulesModal.style.display = 'none'; }
+    </script>
+</body>
+</html>
